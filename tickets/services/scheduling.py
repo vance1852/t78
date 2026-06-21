@@ -708,3 +708,222 @@ def generate_conflict_report(
         "total_conflicts": len(conflicts),
         "conflicts": conflicts,
     }
+
+
+def manual_schedule(
+    show_ids: List[int],
+    start_date: datetime,
+    end_date: datetime,
+    hall_ids: Optional[List[int]] = None,
+) -> dict:
+    """
+    手工顺序排期：按输入顺序逐个排入最早可用空档，不做优先级排序。
+
+    与 auto_schedule 对比可体现"贪心优先级排序"对利用率的影响。
+    """
+    shows = list(Show.objects.filter(pk__in=show_ids).order_by("pk"))
+
+    if not shows:
+        return {"scheduled": [], "failed": [], "utilization": 0.0, "method": "manual"}
+
+    halls_qs = Hall.objects.all()
+    if hall_ids:
+        halls_qs = halls_qs.filter(pk__in=hall_ids)
+    halls = list(halls_qs)
+
+    if not halls:
+        return {"scheduled": [], "failed": [{"show_id": s.id, "title": s.title, "reason": "无可用厅"} for s in shows], "utilization": 0.0, "method": "manual"}
+
+    hall_timelines = {h.id: [] for h in halls}
+
+    for hall in halls:
+        perfs = Performance.objects.filter(
+            hall=hall,
+            setup_start_at__lt=end_date,
+            teardown_end_at__gt=start_date,
+        ).order_by("setup_start_at")
+        for p in perfs:
+            hall_timelines[hall.id].append((p.setup_start_at, p.teardown_end_at))
+
+        maints = MaintenancePeriod.objects.filter(
+            hall=hall,
+            start_at__lt=end_date,
+            end_at__gt=start_date,
+        ).order_by("start_at")
+        for m in maints:
+            hall_timelines[hall.id].append((m.start_at, m.end_at))
+
+        hall_timelines[hall.id].sort(key=lambda x: x[0])
+
+    scheduled = []
+    failed = []
+
+    for show in shows:
+        total_minutes = show.setup_minutes + show.duration_minutes + show.teardown_minutes
+        total_delta = timedelta(minutes=total_minutes)
+
+        suitable_halls = []
+        for h in halls:
+            if h.capacity < show.min_capacity:
+                continue
+            if show.required_facilities and not all(f in h.facilities for f in show.required_facilities):
+                continue
+            suitable_halls.append(h)
+
+        if not suitable_halls:
+            failed.append({
+                "show_id": show.id,
+                "title": show.title,
+                "reason": "没有满足容量/设备要求的厅",
+            })
+            continue
+
+        placed = False
+        for hall in suitable_halls:
+            timeline = hall_timelines[hall.id]
+            current = start_date
+
+            for occ_start, occ_end in timeline:
+                if current < occ_start and (occ_start - current) >= total_delta:
+                    setup_start = current
+                    perf_start = setup_start + timedelta(minutes=show.setup_minutes)
+                    perf_end = perf_start + timedelta(minutes=show.duration_minutes)
+                    teardown_end = perf_end + timedelta(minutes=show.teardown_minutes)
+
+                    scheduled.append({
+                        "show_id": show.id,
+                        "show_title": show.title,
+                        "hall_id": hall.id,
+                        "hall_name": hall.name,
+                        "theater_name": hall.theater.name,
+                        "setup_start_at": setup_start,
+                        "start_at": perf_start,
+                        "end_at": perf_end,
+                        "teardown_end_at": teardown_end,
+                        "duration_minutes": show.duration_minutes,
+                        "setup_minutes": show.setup_minutes,
+                        "teardown_minutes": show.teardown_minutes,
+                    })
+
+                    hall_timelines[hall.id].append((setup_start, teardown_end))
+                    hall_timelines[hall.id].sort(key=lambda x: x[0])
+                    placed = True
+                    break
+                current = max(current, occ_end)
+
+            if placed:
+                break
+
+            if current < end_date and (end_date - current) >= total_delta:
+                setup_start = current
+                perf_start = setup_start + timedelta(minutes=show.setup_minutes)
+                perf_end = perf_start + timedelta(minutes=show.duration_minutes)
+                teardown_end = perf_end + timedelta(minutes=show.teardown_minutes)
+
+                scheduled.append({
+                    "show_id": show.id,
+                    "show_title": show.title,
+                    "hall_id": hall.id,
+                    "hall_name": hall.name,
+                    "theater_name": hall.theater.name,
+                    "setup_start_at": setup_start,
+                    "start_at": perf_start,
+                    "end_at": perf_end,
+                    "teardown_end_at": teardown_end,
+                    "duration_minutes": show.duration_minutes,
+                    "setup_minutes": show.setup_minutes,
+                    "teardown_minutes": show.teardown_minutes,
+                })
+
+                hall_timelines[hall.id].append((setup_start, teardown_end))
+                hall_timelines[hall.id].sort(key=lambda x: x[0])
+                placed = True
+                break
+
+        if not placed:
+            failed.append({
+                "show_id": show.id,
+                "title": show.title,
+                "reason": "指定时段内找不到合适空档",
+            })
+
+    total_hall_minutes = len(halls) * (end_date - start_date).total_seconds() / 60
+    used_minutes = 0.0
+    for hall in halls:
+        timeline = hall_timelines[hall.id]
+        for s, e in timeline:
+            eff_start = max(s, start_date)
+            eff_end = min(e, end_date)
+            if eff_start < eff_end:
+                used_minutes += (eff_end - eff_start).total_seconds() / 60
+
+    utilization = round(used_minutes / total_hall_minutes * 100, 2) if total_hall_minutes > 0 else 0.0
+
+    return {
+        "scheduled": scheduled,
+        "failed": failed,
+        "utilization": utilization,
+        "method": "manual",
+    }
+
+
+def compare_schedule_methods(
+    show_ids: List[int],
+    start_date: datetime,
+    end_date: datetime,
+    hall_ids: Optional[List[int]] = None,
+) -> dict:
+    """
+    自动排期与手工顺序排期的利用率对比。
+
+    分别以三种自动优先级模式和手工顺序模式排同一批演出，
+    对比排入数量、失败数量和厅利用率。
+    """
+    auto_high = auto_schedule(show_ids, start_date, end_date, "high_first", hall_ids)
+    auto_long = auto_schedule(show_ids, start_date, end_date, "long_first", hall_ids)
+    auto_short = auto_schedule(show_ids, start_date, end_date, "short_first", hall_ids)
+    manual = manual_schedule(show_ids, start_date, end_date, hall_ids)
+
+    return {
+        "show_count": len(show_ids),
+        "period_start": start_date,
+        "period_end": end_date,
+        "comparison": [
+            {
+                "method": "auto_high_first",
+                "label": "智能排期（重点优先）",
+                "scheduled_count": len(auto_high["scheduled"]),
+                "failed_count": len(auto_high["failed"]),
+                "utilization": auto_high["utilization"],
+                "scheduled": auto_high["scheduled"],
+                "failed": auto_high["failed"],
+            },
+            {
+                "method": "auto_long_first",
+                "label": "智能排期（长演出优先）",
+                "scheduled_count": len(auto_long["scheduled"]),
+                "failed_count": len(auto_long["failed"]),
+                "utilization": auto_long["utilization"],
+                "scheduled": auto_long["scheduled"],
+                "failed": auto_long["failed"],
+            },
+            {
+                "method": "auto_short_first",
+                "label": "智能排期（短演出优先）",
+                "scheduled_count": len(auto_short["scheduled"]),
+                "failed_count": len(auto_short["failed"]),
+                "utilization": auto_short["utilization"],
+                "scheduled": auto_short["scheduled"],
+                "failed": auto_short["failed"],
+            },
+            {
+                "method": "manual_sequential",
+                "label": "手工顺序排期",
+                "scheduled_count": len(manual["scheduled"]),
+                "failed_count": len(manual["failed"]),
+                "utilization": manual["utilization"],
+                "scheduled": manual["scheduled"],
+                "failed": manual["failed"],
+            },
+        ],
+    }

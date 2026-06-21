@@ -109,7 +109,7 @@ class Command(BaseCommand):
                 "setup_minutes": 120,
                 "teardown_minutes": 60,
                 "min_capacity": 1000,
-                "required_facilities=["专业舞台", "LED大屏", "环绕音响", "专业灯光"],
+                "required_facilities": ["专业舞台", "LED大屏", "环绕音响", "专业灯光"],
             },
             {
                 "title": "金陵往事",
@@ -120,7 +120,7 @@ class Command(BaseCommand):
                 "setup_minutes": 90,
                 "teardown_minutes": 45,
                 "min_capacity": 400,
-                "required_facilities=["镜框式舞台", "专业灯光"],
+                "required_facilities": ["镜框式舞台", "专业灯光"],
             },
             {
                 "title": "敦煌·丝路飞天",
@@ -131,7 +131,7 @@ class Command(BaseCommand):
                 "setup_minutes": 180,
                 "teardown_minutes": 90,
                 "min_capacity": 800,
-                "required_facilities=["专业舞台", "LED大屏", "专业灯光"],
+                "required_facilities": ["专业舞台", "LED大屏", "专业灯光"],
             },
             {
                 "title": "经典戏曲专场",
@@ -142,7 +142,7 @@ class Command(BaseCommand):
                 "setup_minutes": 60,
                 "teardown_minutes": 30,
                 "min_capacity": 300,
-                "required_facilities=["专业灯光"],
+                "required_facilities": ["专业灯光"],
             },
             {
                 "title": "贝多芬交响乐之夜",
@@ -153,7 +153,7 @@ class Command(BaseCommand):
                 "setup_minutes": 60,
                 "teardown_minutes": 30,
                 "min_capacity": 800,
-                "required_facilities=["专业声学设计"],
+                "required_facilities": ["专业声学设计"],
             },
             {
                 "title": "小王子",
@@ -164,7 +164,7 @@ class Command(BaseCommand):
                 "setup_minutes": 60,
                 "teardown_minutes": 30,
                 "min_capacity": 300,
-                "required_facilities=["专业灯光", "基础音响"],
+                "required_facilities": ["专业灯光", "基础音响"],
             },
             {
                 "title": "雷雨",
@@ -175,7 +175,7 @@ class Command(BaseCommand):
                 "setup_minutes": 120,
                 "teardown_minutes": 60,
                 "min_capacity": 500,
-                "required_facilities=["镜框式舞台", "专业灯光", "扩声系统"],
+                "required_facilities": ["镜框式舞台", "专业灯光", "扩声系统"],
             },
             {
                 "title": "钢琴独奏音乐会",
@@ -186,7 +186,7 @@ class Command(BaseCommand):
                 "setup_minutes": 30,
                 "teardown_minutes": 15,
                 "min_capacity": 200,
-                "required_facilities=["自然声学设计"],
+                "required_facilities": ["自然声学设计"],
             },
         ]
 

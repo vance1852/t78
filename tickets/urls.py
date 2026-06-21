@@ -16,6 +16,7 @@ from tickets.views import (
     dashboard_stats,
     hall_calendar_view,
     me,
+    schedule_comparison,
     utilization_report,
 )
 
@@ -39,6 +40,7 @@ urlpatterns = [
     path("dashboard/stats", dashboard_stats),
     path("scheduling/available-slots", available_slots),
     path("scheduling/auto-schedule", auto_schedule_view),
+    path("scheduling/schedule-comparison", schedule_comparison),
     path("scheduling/utilization", utilization_report),
     path("scheduling/conflict-report", conflict_report),
     path("scheduling/calendar", hall_calendar_view),

@@ -39,6 +39,7 @@ from tickets.services import (
     calculate_hall_utilization,
     check_maintenance_conflict,
     check_performance_conflict,
+    compare_schedule_methods,
     find_available_slots,
     find_impact_analysis,
     generate_conflict_report,
@@ -728,3 +729,20 @@ def dashboard_stats(request):
         "theater_count": theater_count,
         "hall_count": hall_count,
     })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def schedule_comparison(request):
+    s = AutoScheduleSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    data = s.validated_data
+
+    result = compare_schedule_methods(
+        show_ids=data["show_ids"],
+        start_date=data["start_date"],
+        end_date=data["end_date"],
+        hall_ids=data.get("hall_ids"),
+    )
+
+    return Response(result)
